@@ -1,0 +1,277 @@
+
+<!DOCTYPE html>
+<html>
+
+<head>
+<title>master_case_file</title>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+<meta http-equiv="X-UA-Compatible" content="chrome=1">
+<meta name="viewport" content="width=device-width, user-scalable=no">
+
+<style type="text/css">
+body {
+	margin: 0;
+}
+
+#c {
+	position: absolute;
+	left:0;
+	top:0;
+	width: 100%;
+	height: 100%;
+}
+</style>
+
+<script type="text/javascript" src="js/webgl-utils.js"></script>
+<script type="text/javascript">var DEBUG = true;</script>
+<script type="text/javascript" src="js/inka3d/control.js"></script>
+<script type="text/javascript" src="js/inka3d/engine.js"></script>
+<script type="text/javascript" src="master_case_file.js"></script>
+<script type="text/javascript">
+'use strict';
+
+// shortcuts for inka3d modules
+var control = inka3dControl;
+var engine = inka3dEngine;
+
+var canvas;
+var gl;
+
+// inka3d renderer
+var renderer;
+
+// render group
+var group;
+
+// scene loader
+var loader;
+
+// scene and scene attributes
+var scene;
+var sceneTime;
+
+// mouse/touch input handler
+var input;
+
+// parameters of user controllable camera
+var cameraTargetX = 22.043047;
+var cameraTargetY = -5.94648743;
+var cameraTargetZ = 11.4503479;
+var cameraRotateX = -0.613279939;
+var cameraRotateY = 0.0942477882;
+var cameraDistance = 382.920929;
+
+// camera projection parameters
+var cameraProjection = new Float32Array([2.0, 1.37795, 1.41732, 0.94488, 0.0, 0.0, 0.1, 10000.0]);
+
+var startTime;
+
+// screen aspect ratio, width / height
+var aspect;
+
+// view and projection matrix
+var viewMatrix = new Float32Array(16);
+var projectionMatrix = new Float32Array(16);
+
+// 3d Array Variables
+var visibilityCase1;
+var visibilityCase2;
+var visibilityCase3;
+var Case1RGB;
+var Case2RGB;
+var Case3RGB;
+var CaseBumperRGB;
+var case1vis = false;
+var case2vis = false;
+var case3vis = false;
+
+
+
+function waitLoad()
+{
+	if (loader.progress < 1)
+	{
+		// continue waiting...
+		requestAnimFrame(waitLoad);
+		
+		gl.clearColor(0, 0, 0, 1);
+		gl.clear(gl.COLOR_BUFFER_BIT);
+		
+		gl.enable(gl.SCISSOR_TEST);
+		var w = window.innerWidth;
+		var h = window.innerHeight;
+		gl.scissor(0, h / 2 - 10, w * loader.progress, 20);
+		gl.clearColor(0, 0, 0, 1);
+		gl.clear(gl.COLOR_BUFFER_BIT);
+		gl.disable(gl.SCISSOR_TEST);
+	}
+	else
+	{
+		// loading finished
+
+
+		// install event listeners
+		input.move = function(dx, dy)
+		{
+			// rotate camera
+			cameraRotateX += dy * 2.5;
+			cameraRotateY -= dx * 2.5;		
+		};
+		input.scroll = function(dx, dy)
+		{			
+			// change distance of camera
+			cameraDistance = Math.min(Math.max(cameraDistance / Math.exp(dy / 9), 3.82920933), 38292.0938);
+		}
+		input.zoomRotate = function(zoom, angle)
+		{
+			// change distance of camera
+			cameraDistance = Math.min(Math.max(cameraDistance / zoom, 3.82920933), 38292.0938);
+		}
+
+		// start
+		startTime = new Date().getTime() / 1000.0 - 0.041666666666666664;
+		
+		setArrays();
+		tick();
+	}
+}
+
+function tick()
+{
+	requestAnimFrame(tick);
+	drawScene();
+
+}
+
+function drawScene()
+{
+	// get time
+	var time = new Date().getTime() / 1000.0 - startTime;
+	if (time > 2)
+	{
+		var length = 2 - 0.041666666666666664;
+		time -= length;
+		startTime += length;
+	}
+	
+	// set time
+	sceneTime[0] = time;
+	
+	// update the group (recalculates scene graph and also cameraMatrix and cameraProjection)
+	group.update();
+	
+	// calculate view matrix from camera parameters
+	control.cameraY(cameraTargetX, cameraTargetY, cameraTargetZ, cameraRotateX, cameraRotateY, 0,
+		cameraDistance, viewMatrix);
+
+	// calculate projection matrix from camera projection parameters and screen aspect ratio
+	engine.matrix4x4Projection(cameraProjection, aspect, projectionMatrix);
+
+	// clear default render target
+	gl.clearColor(1.0, 1.0, 1.0, 1.0);
+	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+	// render the group using render layer "color"
+	gl.viewport(0, 0, canvas.width, canvas.height);
+	gl.enable(gl.DEPTH_TEST);
+	group.render(viewMatrix, projectionMatrix, "color");
+}
+
+function resize()
+{
+	var width = canvas.offsetWidth;
+	var height = canvas.offsetHeight;
+	canvas.width = width;
+	canvas.height = height;
+	aspect = width / height;
+}
+
+function webGLStart()
+{
+	// get canvas
+	canvas = document.getElementById("c");
+
+	// get webgl context
+	gl = WebGLUtils.setupWebGL(canvas);
+
+	// create mouse/touch input handler
+	input = new control.Input(canvas);
+
+	// create renderer with given number of pre-allocated render jobs
+	renderer = new engine.Renderer(168);
+	
+	// create a render group
+	group = renderer.createGroup();
+
+	// set resize handler
+	window.onresize = resize;
+	resize();
+	
+	// load scene container that is embedded into this html via script tag
+	// add selection code here if you exported multiple texture sets or image formats
+	loader = engine.loadEmbedded(master_case_file, 'master_case_file.dat', '/textures/', '.jpg', function (container)
+	{
+		// loading finished: check if successful
+		if (this.status != 0)
+		{
+			if ((this.status / 100 | 0) == 4)
+				alert('HTTP error: ' + this.status);
+			else
+				alert('Error: ' + this.status);
+		}
+
+		// create scene
+		scene = container.createScene("master_case_file", group);
+		sceneTime = scene.getFloatVector("time", 1);
+	});
+
+	// wait until loading is finished
+	waitLoad();
+}
+
+function setArrays()
+
+{
+	visibilityCase1 = scene.getIntVector("Case_Plate_Plain.visibility",1);
+	visibilityCase2 = scene.getIntVector("Case_Plate_Flame.visibility",1);
+	visibilityCase3 = scene.getIntVector("Case_Plate_Abide.visibility",1);
+	Case1RGB = scene.getFloatVector("case_1_MAT.color",3);
+	Case2RGB = scene.getFloatVector("case_2_MAT.color",3);
+	Case3RGB = scene.getFloatVector("case_3_MAT.color",3);
+	CaseBumperRGB = scene.getFloatVector("case_body_MAT.color",3);
+	
+	
+	
+	
+	if (case1vis){
+	 	visibilityCase1[0]=1;
+	 }
+	 else{
+	 	visibilityCase1[0]=0;
+	 }
+	if (case2vis){
+	 	visibilityCase2[0]=1;
+	 }
+	 else{
+	 	 visibilityCase2[0]=0;
+	}
+	if (case3vis){
+		visibilityCase3[0]=1;
+	}
+	else{
+		 visibilityCase3[0]=0;
+	}
+
+
+
+}
+
+
+</script>
+</head>
+<body onload="webGLStart();">
+	<canvas id="c">
+	</canvas>
+</body>
+</html>
+
